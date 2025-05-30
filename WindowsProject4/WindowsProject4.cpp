@@ -617,7 +617,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     ball.xcenter = 1.05*width / 2;
     ball.ycenter = height - 14 * racket.height - ball.R - 2*border;
     ball.vx = 50;
-    ball.vy = -10;
+    ball.vy = -50; //-10
     ball.vs[0] = ball.vx / ball.vmod;
     ball.vs[1] = ball.vy / ball.vmod;
 
