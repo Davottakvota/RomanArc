@@ -37,7 +37,7 @@ struct Ball {
     bool show;
     int vx; //Ñêîðîñòü
     int vy;
-    float vmod = sqrt(vx*vx+vy*vy); // Ìîäóëü âåêòîðà ñêîðîñòè
+    float vmod; // Ìîäóëü âåêòîðà ñêîðîñòè
     float vs[2];
 };
 
@@ -95,8 +95,65 @@ void VertexCollision(Ball ball, Blocks block, float* xMin, float* yMin, int* ACx
             sD = sqrt(pow((2.0 * ball.vy * ball.vx * ay - 2.0 * pow(ball.vy, 2) * ax), 2) - 4.0 * (pow(ball.vx, 2) + pow(ball.vy, 2)) * (pow(ball.vy, 2) * pow(ax, 2) + pow(ball.vx, 2) * pow(ay, 2) - 2 * ball.vx * ball.vy * ax * ay - pow(ball.R * ball.vx, 2))); //Äèñêðèìèíàíò
 
             if (sD >= 0) {
-                xC = ((2.0 * pow(ball.vy, 2) * ax - 2.0 * ball.vy * ball.vx * ay) + sign(ball.vx * ball.vy * ay) * sD) / (2.0 * (pow(ball.vx, 2) + pow(ball.vy, 2)));
-                yC = sign(ball.vy*(xC-ax)+ay*ball.vx) * sqrt(pow(ball.R, 2) - pow(xC, 2));
+                xC = ((2.0 * pow(ball.vy, 2) * ax - 2.0 * ball.vy * ball.vx * ay) + sign(ball.vx) * sD) / (2.0 * (pow(ball.vx, 2) + pow(ball.vy, 2)));
+                yC = ((ball.vy*(xC-ax)+ay*ball.vx>=0)? 1 : -1) * ((ball.vx >= 0) ? 1 : -1) * sqrt(pow(ball.R, 2) - pow(xC, 2));
+
+                tempx = xC; 
+                tempy = yC;
+
+                xC += ball.xcenter;
+                yC += ball.ycenter;
+
+                if (Ay == 274) {
+                    Ay = Ay;
+                }
+
+                if ((sign(Ax - xC) == sign(ball.vx) || sign(Ax - xC) == 0) && (sign(Ay - yC) == sign(ball.vy) || sign(Ay - yC) == 0)) {
+                    dC = pow(xC - Ax, 2) + pow(yC - Ay, 2);
+                    if (*distmin > dC) {
+                        *distmin = dC;
+                        *xMin = xC;
+                        *yMin = yC;
+                        *ACx = Ax;
+                        *ACy = Ay;
+                    }
+                }
+            }
+        }
+    }
+
+}
+
+void VertexCollisionRacket(Ball ball, Racket racket, float* xMin, float* yMin, int* ACx, int* ACy, float* distmin) {
+    int xmin = INT_MAX;
+    int ymin = INT_MAX;
+    float dC;
+
+    float xC;
+    float yC;
+
+
+    int Ax;
+    int Ay;
+
+    int ax;
+    int ay;
+    long double sD;
+
+    float tempx, tempy;
+
+    for (int i = -1; i <= 1; i += 2) {
+        for (int j = -1; j <= 1; j += 2) {
+            Ax = racket.xcenter + i * racket.width / 2;
+            Ay = racket.ycenter + j * racket.height / 2;
+
+            ax = Ax - ball.xcenter;
+            ay = Ay - ball.ycenter;
+            sD = sqrt(pow((2.0 * ball.vy * ball.vx * ay - 2.0 * pow(ball.vy, 2) * ax), 2) - 4.0 * (pow(ball.vx, 2) + pow(ball.vy, 2)) * (pow(ball.vy, 2) * pow(ax, 2) + pow(ball.vx, 2) * pow(ay, 2) - 2 * ball.vx * ball.vy * ax * ay - pow(ball.R * ball.vx, 2))); //Äèñêðèìèíàíò
+
+            if (sD >= 0) {
+                xC = ((2.0 * pow(ball.vy, 2) * ax - 2.0 * ball.vy * ball.vx * ay) + sign(ball.vx) * sD) / (2.0 * (pow(ball.vx, 2) + pow(ball.vy, 2)));
+                yC = ((ball.vy * (xC - ax) + ay * ball.vx >= 0) ? 1 : -1) * ((ball.vx >= 0) ? 1 : -1) * sqrt(pow(ball.R, 2) - pow(xC, 2));
 
                 tempx = xC;
                 tempy = yC;
@@ -124,12 +181,12 @@ void VertexCollision(Ball ball, Blocks block, float* xMin, float* yMin, int* ACx
 
 }
 
-bool Collision(Ball* ball, Blocks* blocks, size_t blsize, HDC hdc = 0) {
+bool Collision(Ball* ball, Racket racket, Blocks* blocks, size_t blsize, int width, int height, HDC hdc = 0) {
     int q1, xC1, yC1, q2, xC2, yC2, q3, xC3, yC3, q4, xC4, yC4; //ÏÅÐÅÄÅËÀÒÜ
     float dC1, dC2, dC3, dC4;
 
-    float xC; //Äëÿ óãëîâ
-    float yC;
+    float xC, xCR; //Äëÿ óãëîâ
+    float yC, yCR;
 
     int xmin = ball->xcenter + ball->vx;
     int ymin = ball->ycenter + ball->vy;
@@ -229,6 +286,136 @@ bool Collision(Ball* ball, Blocks* blocks, size_t blsize, HDC hdc = 0) {
 
             }
         }
+        if (ball->xcenter + ball->R + ball->vx > width) {
+            //ÏÐÀÂÀß ÊÎËËÈÇÈß
+            if (ball->vx) {
+                ballpoint[0] = ball->xcenter + ball->R;
+                ballpoint[1] = ball->ycenter;
+
+                q2 = width - ball->xcenter;
+                yC2 = (q2 - ball->R) * (ball->vy / ball->vx) + ball->ycenter;
+
+                //DrawLINE(hdc, ballpoint[0], ballpoint[1], xC2, yC2, 2, 255, 0, 0);
+
+                xC2 = q2 + ball->xcenter;
+                dC2 = pow((xC2 - ballpoint[0]), 2) + pow((yC2 - ballpoint[1]), 2);
+                if (distmin > dC2) {
+                    distmin = dC2;
+                    xmin = xC2;
+                    ymin = yC2;
+
+                    //TEMP
+                    IntersectionPoint[0] = ballpoint[0];
+                    IntersectionPoint[1] = ballpoint[1];
+
+                    flag[0] = 1;
+                    flag[1] = 0;
+                    flag[2] = 0;
+                }
+            }
+        }
+        if (ball->ycenter - ball->R + ball->vy < 0) {
+            //ÍÈÆÍßß ÊÎËËÈÇÈß (äëÿ ïîëüçîâàòåëÿ ýòî ÂÅÐÕ)
+            ballpoint[0] = ball->xcenter;
+            ballpoint[1] = ball->ycenter - ball->R;
+
+            q4 = 0 - ball->ycenter;
+            xC4 = (q4 + ball->R) * (ball->vx / ball->vy) + ball->xcenter;
+            yC4 = q4 + ball->ycenter;
+            dC4 = pow((xC4 - ballpoint[0]), 2) + pow((yC4 - ballpoint[1]), 2);
+            if (distmin > dC4) {
+                distmin = dC4;
+                xmin = xC4;
+                ymin = yC4;
+
+                //TEMP
+                IntersectionPoint[0] = ballpoint[0];
+                IntersectionPoint[1] = ballpoint[1];
+
+                flag[0] = 0;
+                flag[1] = 1;
+                flag[2] = 0;
+            }
+        }
+        if (!(racket.xcenter + racket.width / 2 < ball->xcenter - ball->R ||
+            racket.xcenter - racket.width / 2 > ball->xcenter + ball->R + ball->vx ||
+            racket.ycenter + racket.height / 2 < ball->ycenter - ball->R + ball->vy ||
+            racket.ycenter - racket.height / 2 > ball->ycenter + ball->R)) {
+
+            //blocks[i].show = 0;
+
+            //ÍÈÆÍßß ÊÎËËÈÇÈß (äëÿ ïîëüçîâàòåëÿ ýòî ÂÅÐÕ)
+            ballpoint[0] = ball->xcenter;
+            ballpoint[1] = ball->ycenter - ball->R;
+
+            q4 = racket.ycenter + racket.height / 2 - ball->ycenter;
+            xC4 = (q4 + ball->R) * (ball->vx / ball->vy) + ball->xcenter;
+            if (xC4 >= racket.xcenter - racket.width / 2 && xC4 <= racket.xcenter + racket.width / 2 && xC4 >= ball->xcenter) { //Òàêîå óñëîâèå òîëüêî äëÿ âåðõà-íèçà. Äëÿ ëåâà-ïðàâà äðóãîå, íà y
+                yC4 = q4 + ball->ycenter;
+                dC4 = pow((xC4 - ballpoint[0]), 2) + pow((yC4 - ballpoint[1]), 2);
+                if (distmin > dC4) {
+                    distmin = dC4;
+                    xmin = xC4;
+                    ymin = yC4;
+
+                    //TEMP
+                    IntersectionPoint[0] = ballpoint[0];
+                    IntersectionPoint[1] = ballpoint[1];
+
+                    flag[0] = 0;
+                    flag[1] = 1;
+                    flag[2] = 0;
+                }
+            }
+
+            //ÏÐÀÂÀß ÊÎËËÈÇÈß
+            if (ball->vx) {
+                ballpoint[0] = ball->xcenter + ball->R;
+                ballpoint[1] = ball->ycenter;
+
+                q2 = racket.xcenter - racket.width / 2 - ball->xcenter;
+                yC2 = (q2 - ball->R) * (ball->vy / ball->vx) + ball->ycenter;
+
+                //DrawLINE(hdc, ballpoint[0], ballpoint[1], xC2, yC2, 2, 255, 0, 0);
+
+                if (yC2 >= racket.ycenter - racket.height / 2 && yC2 <= racket.ycenter + racket.height / 2 && yC2 <= ball->ycenter) {
+                    xC2 = q2 + ball->xcenter;
+                    dC2 = pow((xC2 - ballpoint[0]), 2) + pow((yC2 - ballpoint[1]), 2);
+                    if (distmin > dC2) {
+                        distmin = dC2;
+                        xmin = xC2;
+                        ymin = yC2;
+
+                        //TEMP
+                        IntersectionPoint[0] = ballpoint[0];
+                        IntersectionPoint[1] = ballpoint[1];
+
+                        flag[0] = 1;
+                        flag[1] = 0;
+                        flag[2] = 0;
+                    }
+                }
+            }
+
+            //ÓÃËÛ
+            xCR = -1;
+            yCR = -1;
+            VertexCollisionRacket(*ball, racket, &xCR, &yCR, &xmin, &ymin, &distmin);
+            if (xCR > 0) {
+                ballpoint[0] = xCR;
+                ballpoint[1] = yCR;
+
+                //TEMP
+                IntersectionPoint[0] = ballpoint[0];
+                IntersectionPoint[1] = ballpoint[1];
+
+                flag[0] = 0;
+                flag[1] = 0;
+                flag[2] = 1;
+            }
+
+        }
+
     }
     if (ball->vx < 0 && ball->vy < 0) { //ËÅÂÎ-ÍÈÇ (äëÿ ïîëüçîâàòåëÿ ýòî ËÅÂÎ ÂÅÐÕ)
         for (size_t i = 0; i < blsize; i++) { // ÏÎÑÒÀÂÈË "ÍÅ"
@@ -270,7 +457,7 @@ bool Collision(Ball* ball, Blocks* blocks, size_t blsize, HDC hdc = 0) {
                     ballpoint[0] = ball->xcenter - ball->R;
                     ballpoint[1] = ball->ycenter;
 
-                    q3 = blocks[i].xcenter + blocks[i].width / 2 - ball->xcenter; 
+                    q3 = blocks[i].xcenter + blocks[i].width / 2 - ball->xcenter;
                     yC3 = (q3 + ball->R) * (ball->vy / ball->vx) + ball->ycenter;
 
                     //DrawLINE(hdc, ballpoint[0], ballpoint[1], xC2, yC2, 2, 255, 0, 0);
@@ -316,6 +503,135 @@ bool Collision(Ball* ball, Blocks* blocks, size_t blsize, HDC hdc = 0) {
                 }
 
             }
+        }
+        if (ball->xcenter - ball->R + ball->vx < 0) {
+            //ËÅÂÀß ÊÎËËÈÇÈß
+            if (ball->vx) {
+                ballpoint[0] = ball->xcenter - ball->R;
+                ballpoint[1] = ball->ycenter;
+
+                q3 = 0 - ball->xcenter;
+                yC3 = (q3 + ball->R) * (ball->vy / ball->vx) + ball->ycenter;
+
+                //DrawLINE(hdc, ballpoint[0], ballpoint[1], xC2, yC2, 2, 255, 0, 0);
+
+                xC3 = q3 + ball->xcenter;
+                dC3 = pow((xC3 - ballpoint[0]), 2) + pow((yC3 - ballpoint[1]), 2);
+                if (distmin > dC3) {
+                    distmin = dC3;
+                    xmin = xC3;
+                    ymin = yC3;
+
+                    //TEMP
+                    IntersectionPoint[0] = ballpoint[0];
+                    IntersectionPoint[1] = ballpoint[1];
+
+                    flag[0] = 1;
+                    flag[1] = 0;
+                    flag[2] = 0;
+                }
+            }
+        }
+        if (ball->ycenter - ball->R + ball->vy < 0) {
+            //ÍÈÆÍßß ÊÎËËÈÇÈß (äëÿ ïîëüçîâàòåëÿ ýòî ÂÅÐÕ)
+            ballpoint[0] = ball->xcenter;
+            ballpoint[1] = ball->ycenter - ball->R;
+
+            q4 = 0 - ball->ycenter;
+            xC4 = (q4 + ball->R) * (ball->vx / ball->vy) + ball->xcenter;
+            yC4 = q4 + ball->ycenter;
+            dC4 = pow((xC4 - ballpoint[0]), 2) + pow((yC4 - ballpoint[1]), 2);
+            if (distmin > dC4) {
+                distmin = dC4;
+                xmin = xC4;
+                ymin = yC4;
+
+                //TEMP
+                IntersectionPoint[0] = ballpoint[0];
+                IntersectionPoint[1] = ballpoint[1];
+
+                flag[0] = 0;
+                flag[1] = 1;
+                flag[2] = 0;
+            }
+        }
+        if (!(racket.xcenter - racket.width / 2 > ball->xcenter + ball->R ||
+            racket.xcenter + racket.width / 2 < ball->xcenter - ball->R + ball->vx ||
+            racket.ycenter + racket.height / 2 < ball->ycenter - ball->R + ball->vy ||
+            racket.ycenter - racket.height / 2 > ball->ycenter + ball->R)) {
+
+            //racket.show = 0;
+
+            //ÍÈÆÍßß ÊÎËËÈÇÈß (äëÿ ïîëüçîâàòåëÿ ýòî ÂÅÐÕ)
+            ballpoint[0] = ball->xcenter;
+            ballpoint[1] = ball->ycenter - ball->R;
+
+            q4 = racket.ycenter + racket.height / 2 - ball->ycenter;
+            xC4 = (q4 + ball->R) * (ball->vx / ball->vy) + ball->xcenter;
+            if (xC4 >= racket.xcenter - racket.width / 2 && xC4 <= racket.xcenter + racket.width / 2 && xC4 <= ball->xcenter) { //Òàêîå óñëîâèå òîëüêî äëÿ âåðõà-íèçà. Äëÿ ëåâà-ïðàâà äðóãîå, íà y
+                yC4 = q4 + ball->ycenter;
+                dC4 = pow((xC4 - ballpoint[0]), 2) + pow((yC4 - ballpoint[1]), 2);
+                if (distmin > dC4) {
+                    distmin = dC4;
+                    xmin = xC4;
+                    ymin = yC4;
+
+                    //TEMP
+                    IntersectionPoint[0] = ballpoint[0];
+                    IntersectionPoint[1] = ballpoint[1];
+
+                    flag[0] = 0;
+                    flag[1] = 1;
+                    flag[2] = 0;
+                }
+            }
+
+            //ËÅÂÀß ÊÎËËÈÇÈß
+            if (ball->vx) {
+                ballpoint[0] = ball->xcenter - ball->R;
+                ballpoint[1] = ball->ycenter;
+
+                q3 = racket.xcenter + racket.width / 2 - ball->xcenter;
+                yC3 = (q3 + ball->R) * (ball->vy / ball->vx) + ball->ycenter;
+
+                //DrawLINE(hdc, ballpoint[0], ballpoint[1], xC2, yC2, 2, 255, 0, 0);
+
+                if (yC3 >= racket.ycenter - racket.height / 2 && yC3 <= racket.ycenter + racket.height / 2 && yC3 <= ball->ycenter) {
+                    xC3 = q3 + ball->xcenter;
+                    dC3 = pow((xC3 - ballpoint[0]), 2) + pow((yC3 - ballpoint[1]), 2);
+                    if (distmin > dC3) {
+                        distmin = dC3;
+                        xmin = xC3;
+                        ymin = yC3;
+
+                        //TEMP
+                        IntersectionPoint[0] = ballpoint[0];
+                        IntersectionPoint[1] = ballpoint[1];
+
+                        flag[0] = 1;
+                        flag[1] = 0;
+                        flag[2] = 0;
+                    }
+                }
+            }
+
+            //ÓÃËÛ
+            xCR = -1;
+            yCR = -1;
+            VertexCollisionRacket(*ball, racket, &xCR, &yCR, &xmin, &ymin, &distmin);
+            if (xCR > 0) {
+                ballpoint[0] = xCR;
+                ballpoint[1] = yCR;
+
+                //TEMP
+                IntersectionPoint[0] = ballpoint[0];
+                IntersectionPoint[1] = ballpoint[1];
+
+                flag[0] = 0;
+                flag[1] = 0;
+                flag[2] = 1;
+            }
+
         }
     }
     if (ball->vx < 0 && ball->vy >= 0) { //ËÅÂÎ-ÂÅÐÕ (äëÿ ïîëüçîâàòåëÿ ýòî ËÅÂÎ ÍÈÇ)
@@ -407,6 +723,142 @@ bool Collision(Ball* ball, Blocks* blocks, size_t blsize, HDC hdc = 0) {
 
             }
         }
+        if (ball->xcenter - ball->R + ball->vx < 0) {
+            //ËÅÂÀß ÊÎËËÈÇÈß
+            if (ball->vx) {
+                ballpoint[0] = ball->xcenter - ball->R;
+                ballpoint[1] = ball->ycenter;
+
+                q3 = 0 - ball->xcenter;
+                yC3 = (q3 + ball->R) * (ball->vy / ball->vx) + ball->ycenter;
+
+                //DrawLINE(hdc, ballpoint[0], ballpoint[1], xC2, yC2, 2, 255, 0, 0);
+
+                xC3 = q3 + ball->xcenter;
+                dC3 = pow((xC3 - ballpoint[0]), 2) + pow((yC3 - ballpoint[1]), 2);
+                if (distmin > dC3) {
+                    distmin = dC3;
+                    xmin = xC3;
+                    ymin = yC3;
+
+                    //TEMP
+                    IntersectionPoint[0] = ballpoint[0];
+                    IntersectionPoint[1] = ballpoint[1];
+
+                    flag[0] = 1;
+                    flag[1] = 0;
+                    flag[2] = 0;
+                }
+            }
+        }
+        if (ball->ycenter + ball->R + ball->vy > height) {
+            //ÂÅÐÕÍßß ÊÎËËÈÇÈß (äëÿ ïîëüçîâàòåëÿ ýòî ÍÈÇ)
+            if (ball->vy) {
+                ballpoint[0] = ball->xcenter;
+                ballpoint[1] = ball->ycenter + ball->R;
+
+                q1 = height - ball->ycenter;
+                xC1 = (q1 - ball->R) * (ball->vx / ball->vy) + ball->xcenter;
+                yC1 = q1 + ball->ycenter;
+                dC1 = pow((xC1 - ballpoint[0]), 2) + pow((yC1 - ballpoint[1]), 2);
+                if (distmin > dC1) {
+                    distmin = dC1;
+                    xmin = xC1;
+                    ymin = yC1;
+
+                    //TEMP
+                    IntersectionPoint[0] = ballpoint[0];
+                    IntersectionPoint[1] = ballpoint[1];
+
+                    flag[0] = 0;
+                    flag[1] = 1;
+                    flag[2] = 0;
+                }
+            }
+        }
+        if (!(racket.xcenter - racket.width / 2 > ball->xcenter + ball->R ||
+            racket.xcenter + racket.width / 2 < ball->xcenter - ball->R + ball->vx ||
+            racket.ycenter - racket.height / 2 > ball->ycenter + ball->R + ball->vy ||
+            racket.ycenter + racket.height / 2 < ball->ycenter - ball->R)) {
+
+            //racket.show = 0;
+
+            //ÂÅÐÕÍßß ÊÎËËÈÇÈß (äëÿ ïîëüçîâàòåëÿ ýòî ÍÈÇ)
+            if (ball->vy) {
+                ballpoint[0] = ball->xcenter;
+                ballpoint[1] = ball->ycenter + ball->R;
+
+                q1 = racket.ycenter - racket.height / 2 - ball->ycenter;
+                xC1 = (q1 - ball->R) * (ball->vx / ball->vy) + ball->xcenter;
+                if (xC1 >= racket.xcenter - racket.width / 2 && xC1 <= racket.xcenter + racket.width / 2 && xC1 <= ball->xcenter) { //Òàêîå óñëîâèå òîëüêî äëÿ âåðõà-íèçà. Äëÿ ëåâà-ïðàâà äðóãîå, íà y
+                    yC1 = q1 + ball->ycenter;
+                    dC1 = pow((xC1 - ballpoint[0]), 2) + pow((yC1 - ballpoint[1]), 2);
+                    if (distmin > dC1) {
+                        distmin = dC1;
+                        xmin = xC1;
+                        ymin = yC1;
+
+                        //TEMP
+                        IntersectionPoint[0] = ballpoint[0];
+                        IntersectionPoint[1] = ballpoint[1];
+
+                        flag[0] = 0;
+                        flag[1] = 1;
+                        flag[2] = 0;
+
+                    }
+                }
+            }
+
+            //ËÅÂÀß ÊÎËËÈÇÈß
+            if (ball->vx) {
+                ballpoint[0] = ball->xcenter - ball->R;
+                ballpoint[1] = ball->ycenter;
+
+                q3 = racket.xcenter + racket.width / 2 - ball->xcenter;
+                yC3 = (q3 + ball->R) * (ball->vy / ball->vx) + ball->ycenter;
+
+                //DrawLINE(hdc, ballpoint[0], ballpoint[1], xC2, yC2, 2, 255, 0, 0);
+
+                if (yC3 >= racket.ycenter - racket.height / 2 && yC3 <= racket.ycenter + racket.height / 2 && yC3 >= ball->ycenter) {
+                    xC3 = q3 + ball->xcenter;
+                    dC3 = pow((xC3 - ballpoint[0]), 2) + pow((yC3 - ballpoint[1]), 2);
+                    if (distmin > dC3) {
+                        distmin = dC3;
+                        xmin = xC3;
+                        ymin = yC3;
+
+                        //TEMP
+                        IntersectionPoint[0] = ballpoint[0];
+                        IntersectionPoint[1] = ballpoint[1];
+
+                        flag[0] = 1;
+                        flag[1] = 0;
+                        flag[2] = 0;
+
+                    }
+                }
+            }
+
+            //ÓÃËÛ
+            xCR = -1;
+            yCR = -1;
+            VertexCollisionRacket(*ball, racket, &xCR, &yCR, &xmin, &ymin, &distmin);
+            if (xCR > 0) {
+                ballpoint[0] = xCR;
+                ballpoint[1] = yCR;
+
+                //TEMP
+                IntersectionPoint[0] = ballpoint[0];
+                IntersectionPoint[1] = ballpoint[1];
+
+                flag[0] = 0;
+                flag[1] = 0;
+                flag[2] = 1;
+
+            }
+
+        }
     }
     if (ball->vx >= 0 && ball->vy >= 0) { //ÏÐÀÂÎ-ÂÅÐÕ (äëÿ ïîëüçîâàòåëÿ ýòî ÏÐÀÂÎ ÍÈÇ)
         for (size_t i = 0; i < blsize; i++) { // ÏÎÑÒÀÂÈË "ÍÅ"
@@ -497,17 +949,160 @@ bool Collision(Ball* ball, Blocks* blocks, size_t blsize, HDC hdc = 0) {
 
             }
         }
+        if (ball->ycenter + ball->R + ball->vy > height) {
+            //ÂÅÐÕÍßß ÊÎËËÈÇÈß (äëÿ ïîëüçîâàòåëÿ ýòî ÍÈÇ)
+            if (ball->vy) {
+                ballpoint[0] = ball->xcenter;
+                ballpoint[1] = ball->ycenter + ball->R;
+
+                q1 = height - ball->ycenter;
+                xC1 = (q1 - ball->R) * (ball->vx / ball->vy) + ball->xcenter;
+                yC1 = q1 + ball->ycenter;
+                dC1 = pow((xC1 - ballpoint[0]), 2) + pow((yC1 - ballpoint[1]), 2);
+                if (distmin > dC1) {
+                    distmin = dC1;
+                    xmin = xC1;
+                    ymin = yC1;
+
+                    //TEMP
+                    IntersectionPoint[0] = ballpoint[0];
+                    IntersectionPoint[1] = ballpoint[1];
+
+                    flag[0] = 0;
+                    flag[1] = 1;
+                    flag[2] = 0;
+                }
+            }
+        }
+        if (ball->xcenter + ball->R + ball->vx > width) {
+            //ÏÐÀÂÀß ÊÎËËÈÇÈß
+            if (ball->vx) {
+                ballpoint[0] = ball->xcenter + ball->R;
+                ballpoint[1] = ball->ycenter;
+
+                q2 = width - ball->xcenter;
+                yC2 = (q2 - ball->R) * (ball->vy / ball->vx) + ball->ycenter;
+
+                //DrawLINE(hdc, ballpoint[0], ballpoint[1], xC2, yC2, 2, 255, 0, 0);
+
+                xC2 = q2 + ball->xcenter;
+                dC2 = pow((xC2 - ballpoint[0]), 2) + pow((yC2 - ballpoint[1]), 2);
+                if (distmin > dC2) {
+                    distmin = dC2;
+                    xmin = xC2;
+                    ymin = yC2;
+
+                    //TEMP
+                    IntersectionPoint[0] = ballpoint[0];
+                    IntersectionPoint[1] = ballpoint[1];
+
+                    flag[0] = 1;
+                    flag[1] = 0;
+                    flag[2] = 0;
+                }
+            }
+        }
+        if (!(racket.xcenter + racket.width / 2 < ball->xcenter - ball->R ||
+            racket.xcenter - racket.width / 2 > ball->xcenter + ball->R + ball->vx ||
+            racket.ycenter - racket.height / 2 > ball->ycenter + ball->R + ball->vy ||
+            racket.ycenter + racket.height / 2 < ball->ycenter - ball->R)) {
+
+            //racket.show = 0;
+
+            //ÂÅÐÕÍßß ÊÎËËÈÇÈß (äëÿ ïîëüçîâàòåëÿ ýòî ÍÈÇ)
+            if (ball->vy) {
+                ballpoint[0] = ball->xcenter;
+                ballpoint[1] = ball->ycenter + ball->R;
+
+                q1 = racket.ycenter - racket.height / 2 - ball->ycenter;
+                xC1 = (q1 - ball->R) * (ball->vx / ball->vy) + ball->xcenter;
+                if (xC1 >= racket.xcenter - racket.width / 2 && xC1 <= racket.xcenter + racket.width / 2 && xC1 >= ball->xcenter) { //Òàêîå óñëîâèå òîëüêî äëÿ âåðõà-íèçà. Äëÿ ëåâà-ïðàâà äðóãîå, íà y
+                    yC1 = q1 + ball->ycenter;
+                    dC1 = pow((xC1 - ballpoint[0]), 2) + pow((yC1 - ballpoint[1]), 2);
+                    if (distmin > dC1) {
+                        distmin = dC1;
+                        xmin = xC1;
+                        ymin = yC1;
+
+                        //TEMP
+                        IntersectionPoint[0] = ballpoint[0];
+                        IntersectionPoint[1] = ballpoint[1];
+
+                        flag[0] = 0;
+                        flag[1] = 1;
+                        flag[2] = 0;
+
+                    }
+                }
+            }
+
+            //ÏÐÀÂÀß ÊÎËËÈÇÈß
+            if (ball->vx) {
+                ballpoint[0] = ball->xcenter + ball->R;
+                ballpoint[1] = ball->ycenter;
+
+                q2 = racket.xcenter - racket.width / 2 - ball->xcenter;
+                yC2 = (q2 - ball->R) * (ball->vy / ball->vx) + ball->ycenter;
+
+                //DrawLINE(hdc, ballpoint[0], ballpoint[1], xC2, yC2, 2, 255, 0, 0);
+
+                if (yC2 >= racket.ycenter - racket.height / 2 && yC2 <= racket.ycenter + racket.height / 2 && yC2 >= ball->ycenter) {
+                    xC2 = q2 + ball->xcenter;
+                    dC2 = pow((xC2 - ballpoint[0]), 2) + pow((yC2 - ballpoint[1]), 2);
+                    if (distmin > dC2) {
+                        distmin = dC2;
+                        xmin = xC2;
+                        ymin = yC2;
+
+                        //TEMP
+                        IntersectionPoint[0] = ballpoint[0];
+                        IntersectionPoint[1] = ballpoint[1];
+
+                        flag[0] = 1;
+                        flag[1] = 0;
+                        flag[2] = 0;
+
+                    }
+                }
+            }
+
+            //ÓÃËÛ
+            xCR = -1;
+            yCR = -1;
+            VertexCollisionRacket(*ball, racket, &xCR, &yCR, &xmin, &ymin, &distmin);
+            if (xCR > 0) {
+                ballpoint[0] = xCR;
+                ballpoint[1] = yCR;
+
+                //TEMP
+                IntersectionPoint[0] = ballpoint[0];
+                IntersectionPoint[1] = ballpoint[1];
+
+                flag[0] = 0;
+                flag[1] = 0;
+                flag[2] = 1;
+
+            }
+
+        }
     }
 
-    if (hdc) DrawLINE(hdc, IntersectionPoint[0], IntersectionPoint[1], xmin, ymin, 2, 0, 255, 0);
+    //Sleep(100);
+    //if (imin == 102) {
+    //    imin = imin;
+    //}
 
-    Sleep(1000);
+    if (hdc) DrawLINE(hdc, IntersectionPoint[0], IntersectionPoint[1], xmin, ymin, 2, 0, 255, 0);
 
 
     ball->xcenter += xmin - IntersectionPoint[0];
     ball->ycenter += ymin - IntersectionPoint[1];
     ball->vx -= xmin - IntersectionPoint[0];
     ball->vy -= ymin - IntersectionPoint[1];
+    if (ball->vx == 0 && ball->vy == 0) {
+        ball->vx = ball->vmod * ball->vs[0];
+        ball->vy = ball->vmod * ball->vs[1];
+    }
 
     blocks[imin].show = 0;
 
@@ -532,7 +1127,25 @@ bool Collision(Ball* ball, Blocks* blocks, size_t blsize, HDC hdc = 0) {
     }
 
     if (flag[2]) {
-        ball->vy *= -1;
+        float tempvmod = sqrt(ball->vx * ball->vx + ball->vy * ball->vy);
+       /* float temp1 = (ball->vy + ymin - IntersectionPoint[1]);
+        float temp2 = (ball->vx + xmin - IntersectionPoint[0]);
+        float temp3 = xC - ball->xcenter + (xmin - IntersectionPoint[0]);*/
+        float at1 = atan((ball->vy + ymin - IntersectionPoint[1]) / (ball->vx + xmin - IntersectionPoint[0]));
+        float at2 = 2 * atan((xC - ball->xcenter + (xmin - IntersectionPoint[0])) / (yC - ball->ycenter + (ymin - IntersectionPoint[1])));
+        float phinew = -(at1 + at2);
+
+        int t1 = ((ball->vx * (ymin - ball->ycenter) >= 0) ? 1 : -1);
+        float s1 = ball->vx * (ymin - ball->ycenter);
+        int t2 = (((ymin - ball->ycenter) >= 0) ? 1 : -1);
+        float t3 = sin(phinew);
+
+        ball->vx = tempvmod * cos(phinew) * ((ball->vx * (ymin - ball->ycenter) >= 0) ? 1 : -1) * (((ymin - ball->ycenter) >= 0) ? 1 : -1);
+        //ball->vy = tempvmod * sin(phinew) * ((ball->vx * (ymin - ball->ycenter) >= 0) ? 1 : -1) * (((ymin - ball->ycenter) >= 0) ? 1 : -1);
+        ball->vy = tempvmod * sin(phinew) * t1 * t2;
+
+        
+
         ball->vs[0] = (ball->vx)/ sqrt(ball->vx * ball->vx + ball->vy * ball->vy);
         ball->vs[1] = (ball->vy) / sqrt(ball->vx * ball->vx + ball->vy * ball->vy);
         if (hdc) DrawLINE(hdc, ball->xcenter, ball->ycenter, ball->xcenter + ball->vx, ball->ycenter + ball->vy, 2, 255, 0, 255);
@@ -614,10 +1227,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     Ball ball;
     ball.R = 10;
-    ball.xcenter = 1.05*width / 2;
-    ball.ycenter = height - 14 * racket.height - ball.R - 2*border;
+    ball.xcenter = 0.7*width / 2;
+    ball.ycenter = height - 5 * racket.height - ball.R - 2*border;
     ball.vx = 50;
-    ball.vy = -50; //-10
+    ball.vy = 50; //-10
+    ball.vmod = sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
     ball.vs[0] = ball.vx / ball.vmod;
     ball.vs[1] = ball.vy / ball.vmod;
 
@@ -638,16 +1252,23 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
             }
 
-            if (GetAsyncKeyState(VK_LEFT) && racket.xcenter > width / (2 * xcount) + 2 * border) racket.xcenter -= racket.speed;
-            if (GetAsyncKeyState(VK_RIGHT) && racket.xcenter < width - width / (2 * xcount) - 2 * border) racket.xcenter += racket.speed;
+            POINT pnt;
+            GetCursorPos(&pnt);
+            ScreenToClient(GetForegroundWindow(), &pnt);
+            racket.xcenter = max(pnt.x, width / (2 * xcount) + 2 * border);
+            racket.xcenter = min(pnt.x, width - width / (2 * xcount) - 2 * border);
 
-            //**TEMP**
-            float coef = 1.0 / 3;
-            if (GetAsyncKeyState(VK_LEFT)) ball.xcenter -= racket.speed * coef;
-            if (GetAsyncKeyState(VK_RIGHT)) ball.xcenter += racket.speed * coef;
-            if (GetAsyncKeyState(VK_UP)) ball.ycenter -= racket.speed * coef;
-            if (GetAsyncKeyState(VK_DOWN)) ball.ycenter += racket.speed * coef;
-            //**TEMP**
+            //if (GetAsyncKeyState(VK_LEFT) && racket.xcenter > width / (2 * xcount) + 2 * border) racket.xcenter -= racket.speed;
+            //if (GetAsyncKeyState(VK_RIGHT) && racket.xcenter < width - width / (2 * xcount) - 2 * border) racket.xcenter += racket.speed;
+
+
+            ////**TEMP**
+            //float coef = 1.0 / 3;
+            //if (GetAsyncKeyState(VK_LEFT)) ball.xcenter -= racket.speed * coef;
+            //if (GetAsyncKeyState(VK_RIGHT)) ball.xcenter += racket.speed * coef;
+            //if (GetAsyncKeyState(VK_UP)) ball.ycenter -= racket.speed * coef;
+            //if (GetAsyncKeyState(VK_DOWN)) ball.ycenter += racket.speed * coef;
+            ////**TEMP**
 
             HBRUSH brush;
 
@@ -692,7 +1313,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             DeleteObject(brush);
 
             if (!iffirst) {
-                while (Collision(&ball, blocks, sizeof(blocks) / sizeof(blocks[0]), context));
+                while (Collision(&ball, racket, blocks, sizeof(blocks) / sizeof(blocks[0]), width, height, context));
                 ball.vx = ball.vs[0] * ball.vmod;
                 ball.vy = ball.vs[1] * ball.vmod;
             }
@@ -701,7 +1322,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
             BitBlt(device_context, 0, 0, WinCoord.right, WinCoord.bottom, context, 0, 0, SRCCOPY);
 
-            Sleep(10);
+            //Sleep(10);
 
             // TODO: Add any drawing code that uses hdc here...
             //EndPaint(hWnd, &ps);
