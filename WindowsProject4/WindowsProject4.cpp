@@ -38,11 +38,12 @@ struct Ball {
     int vx; //Скорость
     int vy;
     float vmod = sqrt(vx*vx+vy*vy); // Модуль вектора скорости
+    float vs[2];
 };
 
 struct Racket {
-    int x;
-    int y;
+    int xcenter;
+    int ycenter;
     int width;
     int height;
     int speed;
@@ -123,22 +124,24 @@ void VertexCollision(Ball ball, Blocks block, float* xMin, float* yMin, int* ACx
 
 }
 
-void Collision(Ball* ball, Blocks* blocks, size_t blsize, HDC hdc = 0) {
+bool Collision(Ball* ball, Blocks* blocks, size_t blsize, HDC hdc = 0) {
     int q1, xC1, yC1, q2, xC2, yC2, q3, xC3, yC3, q4, xC4, yC4; //ПЕРЕДЕЛАТЬ
     float dC1, dC2, dC3, dC4;
 
     float xC; //Для углов
     float yC;
 
-    int xmin = INT_MAX;
-    int ymin = INT_MAX;
+    int xmin = ball->xcenter + ball->vx;
+    int ymin = ball->ycenter + ball->vy;
     float distmin = FLT_MAX;
 
     int ballpoint[2]; // Точка коллизии на шаре
 
     bool flag[3] = {0,0,0}; //Бока, верх-низ и углы
 
-    int tempP[2];
+    int imin = -1; // Блок, который должен уйти
+
+    int IntersectionPoint[2] = { ball->xcenter , ball->ycenter }; //Точка пересечения на шаре
     if (ball->vx >= 0 && ball->vy < 0) { //ПРАВО-НИЗ (для пользователя это ПРАВО ВЕРХ)
         for (size_t i = 0; i < blsize; i++) { // ПОСТАВИЛ "НЕ"
             if (blocks[i].show && !(blocks[i].xcenter + blocks[i].width / 2 < ball->xcenter - ball->R || 
@@ -163,8 +166,14 @@ void Collision(Ball* ball, Blocks* blocks, size_t blsize, HDC hdc = 0) {
                         ymin = yC4;
 
                         //TEMP
-                        tempP[0] = ballpoint[0];
-                        tempP[1] = ballpoint[1];
+                        IntersectionPoint[0] = ballpoint[0];
+                        IntersectionPoint[1] = ballpoint[1];
+
+                        flag[0] = 0;
+                        flag[1] = 1;
+                        flag[2] = 0;
+
+                        imin = i;
                     }
                 }
 
@@ -187,8 +196,14 @@ void Collision(Ball* ball, Blocks* blocks, size_t blsize, HDC hdc = 0) {
                             ymin = yC2;
 
                             //TEMP
-                            tempP[0] = ballpoint[0];
-                            tempP[1] = ballpoint[1];
+                            IntersectionPoint[0] = ballpoint[0];
+                            IntersectionPoint[1] = ballpoint[1];
+
+                            flag[0] = 1;
+                            flag[1] = 0;
+                            flag[2] = 0;
+
+                            imin = i;
                         }
                     }
                 }
@@ -202,15 +217,20 @@ void Collision(Ball* ball, Blocks* blocks, size_t blsize, HDC hdc = 0) {
                     ballpoint[1] = yC;
 
                     //TEMP
-                    tempP[0] = ballpoint[0];
-                    tempP[1] = ballpoint[1];
+                    IntersectionPoint[0] = ballpoint[0];
+                    IntersectionPoint[1] = ballpoint[1];
+
+                    flag[0] = 0;
+                    flag[1] = 0;
+                    flag[2] = 1;
+
+                    imin = i;
                 }
 
             }
         }
-        if(hdc) DrawLINE(hdc, tempP[0], tempP[1], xmin, ymin, 2, 0, 255, 0);
     }
-    if (ball->vx < 0 && ball->vy < 0) {
+    if (ball->vx < 0 && ball->vy < 0) { //ЛЕВО-НИЗ (для пользователя это ЛЕВО ВЕРХ)
         for (size_t i = 0; i < blsize; i++) { // ПОСТАВИЛ "НЕ"
             if (blocks[i].show && !(blocks[i].xcenter - blocks[i].width / 2 > ball->xcenter + ball->R ||
                 blocks[i].xcenter + blocks[i].width / 2 < ball->xcenter - ball->R + ball->vx ||
@@ -219,10 +239,86 @@ void Collision(Ball* ball, Blocks* blocks, size_t blsize, HDC hdc = 0) {
 
                 //blocks[i].show = 0;
 
+                //НИЖНЯЯ КОЛЛИЗИЯ (для пользователя это ВЕРХ)
+                ballpoint[0] = ball->xcenter;
+                ballpoint[1] = ball->ycenter - ball->R;
+
+                q4 = blocks[i].ycenter + blocks[i].height / 2 - ball->ycenter;
+                xC4 = (q4 + ball->R) * (ball->vx / ball->vy) + ball->xcenter;
+                if (xC4 >= blocks[i].xcenter - blocks[i].width / 2 && xC4 <= blocks[i].xcenter + blocks[i].width / 2 && xC4 <= ball->xcenter) { //Такое условие только для верха-низа. Для лева-права другое, на y
+                    yC4 = q4 + ball->ycenter;
+                    dC4 = pow((xC4 - ballpoint[0]), 2) + pow((yC4 - ballpoint[1]), 2);
+                    if (distmin > dC4) {
+                        distmin = dC4;
+                        xmin = xC4;
+                        ymin = yC4;
+
+                        //TEMP
+                        IntersectionPoint[0] = ballpoint[0];
+                        IntersectionPoint[1] = ballpoint[1];
+
+                        flag[0] = 0;
+                        flag[1] = 1;
+                        flag[2] = 0;
+
+                        imin = i;
+                    }
+                }
+
+                //ЛЕВАЯ КОЛЛИЗИЯ
+                if (ball->vx) {
+                    ballpoint[0] = ball->xcenter - ball->R;
+                    ballpoint[1] = ball->ycenter;
+
+                    q3 = blocks[i].xcenter + blocks[i].width / 2 - ball->xcenter; 
+                    yC3 = (q3 + ball->R) * (ball->vy / ball->vx) + ball->ycenter;
+
+                    //DrawLINE(hdc, ballpoint[0], ballpoint[1], xC2, yC2, 2, 255, 0, 0);
+
+                    if (yC3 >= blocks[i].ycenter - blocks[i].height / 2 && yC3 <= blocks[i].ycenter + blocks[i].height / 2 && yC3 <= ball->ycenter) {
+                        xC3 = q3 + ball->xcenter;
+                        dC3 = pow((xC3 - ballpoint[0]), 2) + pow((yC3 - ballpoint[1]), 2);
+                        if (distmin > dC3) {
+                            distmin = dC3;
+                            xmin = xC3;
+                            ymin = yC3;
+
+                            //TEMP
+                            IntersectionPoint[0] = ballpoint[0];
+                            IntersectionPoint[1] = ballpoint[1];
+
+                            flag[0] = 1;
+                            flag[1] = 0;
+                            flag[2] = 0;
+
+                            imin = i;
+                        }
+                    }
+                }
+
+                //УГЛЫ
+                xC = -1;
+                yC = -1;
+                VertexCollision(*ball, blocks[i], &xC, &yC, &xmin, &ymin, &distmin);
+                if (xC > 0) {
+                    ballpoint[0] = xC;
+                    ballpoint[1] = yC;
+
+                    //TEMP
+                    IntersectionPoint[0] = ballpoint[0];
+                    IntersectionPoint[1] = ballpoint[1];
+
+                    flag[0] = 0;
+                    flag[1] = 0;
+                    flag[2] = 1;
+
+                    imin = i;
+                }
+
             }
         }
     }
-    if (ball->vx < 0 && ball->vy >= 0) {
+    if (ball->vx < 0 && ball->vy >= 0) { //ЛЕВО-ВЕРХ (для пользователя это ЛЕВО НИЗ)
         for (size_t i = 0; i < blsize; i++) { // ПОСТАВИЛ "НЕ"
             if (blocks[i].show && !(blocks[i].xcenter - blocks[i].width / 2 > ball->xcenter + ball->R ||
                 blocks[i].xcenter + blocks[i].width / 2 < ball->xcenter - ball->R + ball->vx ||
@@ -231,10 +327,88 @@ void Collision(Ball* ball, Blocks* blocks, size_t blsize, HDC hdc = 0) {
 
                 //blocks[i].show = 0;
 
+                //ВЕРХНЯЯ КОЛЛИЗИЯ (для пользователя это НИЗ)
+                if (ball->vy) {
+                    ballpoint[0] = ball->xcenter;
+                    ballpoint[1] = ball->ycenter + ball->R;
+
+                    q1 = blocks[i].ycenter - blocks[i].height / 2 - ball->ycenter;
+                    xC1 = (q1 - ball->R) * (ball->vx / ball->vy) + ball->xcenter;
+                    if (xC1 >= blocks[i].xcenter - blocks[i].width / 2 && xC1 <= blocks[i].xcenter + blocks[i].width / 2 && xC1 <= ball->xcenter) { //Такое условие только для верха-низа. Для лева-права другое, на y
+                        yC1 = q1 + ball->ycenter;
+                        dC1 = pow((xC1 - ballpoint[0]), 2) + pow((yC1 - ballpoint[1]), 2);
+                        if (distmin > dC1) {
+                            distmin = dC1;
+                            xmin = xC1;
+                            ymin = yC1;
+
+                            //TEMP
+                            IntersectionPoint[0] = ballpoint[0];
+                            IntersectionPoint[1] = ballpoint[1];
+
+                            flag[0] = 0;
+                            flag[1] = 1;
+                            flag[2] = 0;
+
+                            imin = i;
+                        }
+                    }
+                }
+
+                //ЛЕВАЯ КОЛЛИЗИЯ
+                if (ball->vx) {
+                    ballpoint[0] = ball->xcenter - ball->R;
+                    ballpoint[1] = ball->ycenter;
+
+                    q3 = blocks[i].xcenter + blocks[i].width / 2 - ball->xcenter;
+                    yC3 = (q3 + ball->R) * (ball->vy / ball->vx) + ball->ycenter;
+
+                    //DrawLINE(hdc, ballpoint[0], ballpoint[1], xC2, yC2, 2, 255, 0, 0);
+
+                    if (yC3 >= blocks[i].ycenter - blocks[i].height / 2 && yC3 <= blocks[i].ycenter + blocks[i].height / 2 && yC3 >= ball->ycenter) {
+                        xC3 = q3 + ball->xcenter;
+                        dC3 = pow((xC3 - ballpoint[0]), 2) + pow((yC3 - ballpoint[1]), 2);
+                        if (distmin > dC3) {
+                            distmin = dC3;
+                            xmin = xC3;
+                            ymin = yC3;
+
+                            //TEMP
+                            IntersectionPoint[0] = ballpoint[0];
+                            IntersectionPoint[1] = ballpoint[1];
+
+                            flag[0] = 1;
+                            flag[1] = 0;
+                            flag[2] = 0;
+
+                            imin = i;
+                        }
+                    }
+                }
+
+                //УГЛЫ
+                xC = -1;
+                yC = -1;
+                VertexCollision(*ball, blocks[i], &xC, &yC, &xmin, &ymin, &distmin);
+                if (xC > 0) {
+                    ballpoint[0] = xC;
+                    ballpoint[1] = yC;
+
+                    //TEMP
+                    IntersectionPoint[0] = ballpoint[0];
+                    IntersectionPoint[1] = ballpoint[1];
+
+                    flag[0] = 0;
+                    flag[1] = 0;
+                    flag[2] = 1;
+
+                    imin = i;
+                }
+
             }
         }
     }
-    if (ball->vx >= 0 && ball->vy >= 0) {
+    if (ball->vx >= 0 && ball->vy >= 0) { //ПРАВО-ВЕРХ (для пользователя это ПРАВО НИЗ)
         for (size_t i = 0; i < blsize; i++) { // ПОСТАВИЛ "НЕ"
             if (blocks[i].show && !(blocks[i].xcenter + blocks[i].width / 2 < ball->xcenter - ball->R ||
                 blocks[i].xcenter - blocks[i].width / 2 > ball->xcenter + ball->R + ball->vx ||
@@ -243,15 +417,131 @@ void Collision(Ball* ball, Blocks* blocks, size_t blsize, HDC hdc = 0) {
 
                 //blocks[i].show = 0;
 
+                //ВЕРХНЯЯ КОЛЛИЗИЯ (для пользователя это НИЗ)
+                if (ball->vy) {
+                    ballpoint[0] = ball->xcenter;
+                    ballpoint[1] = ball->ycenter + ball->R;
+
+                    q1 = blocks[i].ycenter - blocks[i].height / 2 - ball->ycenter;
+                    xC1 = (q1 - ball->R) * (ball->vx / ball->vy) + ball->xcenter;
+                    if (xC1 >= blocks[i].xcenter - blocks[i].width / 2 && xC1 <= blocks[i].xcenter + blocks[i].width / 2 && xC1 >= ball->xcenter) { //Такое условие только для верха-низа. Для лева-права другое, на y
+                        yC1 = q1 + ball->ycenter;
+                        dC1 = pow((xC1 - ballpoint[0]), 2) + pow((yC1 - ballpoint[1]), 2);
+                        if (distmin > dC1) {
+                            distmin = dC1;
+                            xmin = xC1;
+                            ymin = yC1;
+
+                            //TEMP
+                            IntersectionPoint[0] = ballpoint[0];
+                            IntersectionPoint[1] = ballpoint[1];
+
+                            flag[0] = 0;
+                            flag[1] = 1;
+                            flag[2] = 0;
+
+                            imin = i;
+                        }
+                    }
+                }
+
+                //ПРАВАЯ КОЛЛИЗИЯ
+                if (ball->vx) {
+                    ballpoint[0] = ball->xcenter + ball->R;
+                    ballpoint[1] = ball->ycenter;
+
+                    q2 = blocks[i].xcenter - blocks[i].width / 2 - ball->xcenter;
+                    yC2 = (q2 - ball->R) * (ball->vy / ball->vx) + ball->ycenter;
+
+                    //DrawLINE(hdc, ballpoint[0], ballpoint[1], xC2, yC2, 2, 255, 0, 0);
+
+                    if (yC2 >= blocks[i].ycenter - blocks[i].height / 2 && yC2 <= blocks[i].ycenter + blocks[i].height / 2 && yC2 >= ball->ycenter) {
+                        xC2 = q2 + ball->xcenter;
+                        dC2 = pow((xC2 - ballpoint[0]), 2) + pow((yC2 - ballpoint[1]), 2);
+                        if (distmin > dC2) {
+                            distmin = dC2;
+                            xmin = xC2;
+                            ymin = yC2;
+
+                            //TEMP
+                            IntersectionPoint[0] = ballpoint[0];
+                            IntersectionPoint[1] = ballpoint[1];
+
+                            flag[0] = 1;
+                            flag[1] = 0;
+                            flag[2] = 0;
+
+                            imin = i;
+                        }
+                    }
+                }
+
+                //УГЛЫ
+                xC = -1;
+                yC = -1;
+                VertexCollision(*ball, blocks[i], &xC, &yC, &xmin, &ymin, &distmin);
+                if (xC > 0) {
+                    ballpoint[0] = xC;
+                    ballpoint[1] = yC;
+
+                    //TEMP
+                    IntersectionPoint[0] = ballpoint[0];
+                    IntersectionPoint[1] = ballpoint[1];
+
+                    flag[0] = 0;
+                    flag[1] = 0;
+                    flag[2] = 1;
+
+                    imin = i;
+                }
+
             }
         }
     }
 
-    if (flag[0]) {
+    if (hdc) DrawLINE(hdc, IntersectionPoint[0], IntersectionPoint[1], xmin, ymin, 2, 0, 255, 0);
 
+    Sleep(1000);
+
+
+    ball->xcenter += xmin - IntersectionPoint[0];
+    ball->ycenter += ymin - IntersectionPoint[1];
+    ball->vx -= xmin - IntersectionPoint[0];
+    ball->vy -= ymin - IntersectionPoint[1];
+
+    blocks[imin].show = 0;
+
+    if (hdc) {
+        HBRUSH brush = CreateSolidBrush(RGB(24, 200, 0));
+        SelectObject(hdc, brush); //Выбираем кисть
+        Ellipse(hdc, ball->xcenter - ball->R, ball->ycenter - ball->R, ball->xcenter + ball->R, ball->ycenter + ball->R);
+        DeleteObject(brush);
     }
 
-    if (hdc) DrawLINE(hdc, ball->xcenter, ball->ycenter, ball->xcenter + ball->vx, ball->ycenter + ball->vy, 2, 255, 0, 255);
+    if (flag[0]) {
+        ball->vx *= -1;
+        ball->vs[0] *= -1;
+        if (hdc) DrawLINE(hdc, ball->xcenter, ball->ycenter, ball->xcenter + ball->vx, ball->ycenter + ball->vy, 2, 255, 0, 255);
+        return 1;
+    }
+    if (flag[1]) {
+        ball->vy *= -1;
+        ball->vs[1] *= -1;
+        if (hdc) DrawLINE(hdc, ball->xcenter, ball->ycenter, ball->xcenter + ball->vx, ball->ycenter + ball->vy, 2, 255, 0, 255);
+        return 1;
+    }
+
+    if (flag[2]) {
+        ball->vy *= -1;
+        ball->vs[0] = (ball->vx)/ sqrt(ball->vx * ball->vx + ball->vy * ball->vy);
+        ball->vs[1] = (ball->vy) / sqrt(ball->vx * ball->vx + ball->vy * ball->vy);
+        if (hdc) DrawLINE(hdc, ball->xcenter, ball->ycenter, ball->xcenter + ball->vx, ball->ycenter + ball->vy, 2, 255, 0, 255);
+        return 1;
+    }
+
+    return 0;
+
+    
 }
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
@@ -318,18 +608,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     Racket racket;
     racket.width = width / xcount - border;
     racket.height = 1.5 * width * yinterval * blocksheightcoef;
-    racket.x = width / 2;
-    racket.y = height - racket.height - border;
+    racket.xcenter = width / 2;
+    racket.ycenter = height - racket.height - border;
     racket.speed = 5;
 
     Ball ball;
     ball.R = 10;
-    ball.xcenter = 1.08*width / 2;
-    ball.ycenter = height - 12.04 * racket.height - ball.R - 2*border;
+    ball.xcenter = 1.05*width / 2;
+    ball.ycenter = height - 14 * racket.height - ball.R - 2*border;
     ball.vx = 50;
-    ball.vy = -50;
+    ball.vy = -10;
+    ball.vs[0] = ball.vx / ball.vmod;
+    ball.vs[1] = ball.vy / ball.vmod;
 
-
+    bool iffirst = 1;
 
     // Main message loop:
     while (msg.message != WM_QUIT)
@@ -346,8 +638,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
             }
 
-            if (GetAsyncKeyState(VK_LEFT) && racket.x > width / (2 * xcount) + 2 * border) racket.x -= racket.speed;
-            if (GetAsyncKeyState(VK_RIGHT) && racket.x < width - width / (2 * xcount) - 2 * border) racket.x += racket.speed;
+            if (GetAsyncKeyState(VK_LEFT) && racket.xcenter > width / (2 * xcount) + 2 * border) racket.xcenter -= racket.speed;
+            if (GetAsyncKeyState(VK_RIGHT) && racket.xcenter < width - width / (2 * xcount) - 2 * border) racket.xcenter += racket.speed;
 
             //**TEMP**
             float coef = 1.0 / 3;
@@ -391,7 +683,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
             brush = CreateSolidBrush(RGB(0, 255, 255));
             SelectObject(context, brush); //Выбираем кисть
-            Rectangle(context, racket.x - racket.width / 2, racket.y - racket.height / 2, racket.x + racket.width / 2, racket.y + racket.height / 2);
+            Rectangle(context, racket.xcenter - racket.width / 2, racket.ycenter - racket.height / 2, racket.xcenter + racket.width / 2, racket.ycenter + racket.height / 2);
             DeleteObject(brush);
 
             brush = CreateSolidBrush(RGB(240, 200, 0));
@@ -399,7 +691,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             Ellipse(context, ball.xcenter - ball.R, ball.ycenter - ball.R, ball.xcenter + ball.R, ball.ycenter + ball.R);
             DeleteObject(brush);
 
-            Collision(&ball, blocks, sizeof(blocks) / sizeof(blocks[0]), context);
+            if (!iffirst) {
+                while (Collision(&ball, blocks, sizeof(blocks) / sizeof(blocks[0]), context));
+                ball.vx = ball.vs[0] * ball.vmod;
+                ball.vy = ball.vs[1] * ball.vmod;
+            }
+
+            DrawLINE(context, ball.xcenter, ball.ycenter, ball.xcenter + ball.vx, ball.ycenter + ball.vy, 2, 255, 0, 255);
 
             BitBlt(device_context, 0, 0, WinCoord.right, WinCoord.bottom, context, 0, 0, SRCCOPY);
 
@@ -407,7 +705,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
             // TODO: Add any drawing code that uses hdc here...
             //EndPaint(hWnd, &ps);
-
+            iffirst = 0;
      }
 
     ExitProcess(0);
